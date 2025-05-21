@@ -40,10 +40,6 @@ if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 if 'law_data' not in st.session_state:
     st.session_state.law_data = {}
-if 'selected_category' not in st.session_state:
-    st.session_state.selected_category = None
-if 'last_used_category' not in st.session_state:
-    st.session_state.last_used_category = None
 # 임베딩 캐싱용 상태
 if 'embedding_data' not in st.session_state:
     st.session_state.embedding_data = {}
@@ -83,12 +79,11 @@ CATEGORY_KEYWORDS = {
 def load_law_data(category=None):
     law_data = {}
     missing_files = []
-    if category:
-        pdf_files = LAW_CATEGORIES[category]
-    else:
-        pdf_files = {}
-        for cat in LAW_CATEGORIES.values():
-            pdf_files.update(cat)
+    # 모든 카테고리의 파일을 한번에 로드
+    pdf_files = {}
+    for cat_files in LAW_CATEGORIES.values():
+        pdf_files.update(cat_files)
+    
     for law_name, pdf_path in pdf_files.items():
         if os.path.exists(pdf_path):
             text = extract_text_from_pdf(pdf_path)
@@ -163,7 +158,6 @@ def classify_question_category(question):
 
 # 법령별 에이전트 응답 (async)
 async def get_law_agent_response_async(law_name, question, history):
-    # 임베딩 데이터가 없으면 생성
     if law_name not in st.session_state.embedding_data:
         text = st.session_state.law_data.get(law_name, "")
         vec, mat, chunks = create_embeddings_for_text(text)
@@ -172,9 +166,9 @@ async def get_law_agent_response_async(law_name, question, history):
         vec, mat, chunks = st.session_state.embedding_data[law_name]
     context = search_relevant_chunks(question, vec, mat, chunks)
     prompt = f"""
-당신은 대한민국 {law_name} 법률 전문가입니다.
+당신은 덤핑 및 무역 관련 전문가입니다. 주어진 자료를 기반으로 답변하되, 일반적으로 알려진 정보도 함께 제공해 주세요.
 
-아래는 질문과 관련된 법령 내용입니다. 반드시 다음 법령 내용을 기반으로 질문에 답변해주세요:
+아래는 질문과 관련된 법령 및 자료 내용입니다:
 {context}
 
 이전 대화:
@@ -183,9 +177,15 @@ async def get_law_agent_response_async(law_name, question, history):
 질문: {question}
 
 # 응답 지침
-1. 제공된 법령 정보에 기반하여 정확하게 답변해주세요.
-2. 답변에 사용한 모든 법령 출처(법령명, 조항)를 명확히 인용해주세요.
-3. 법령에 명시되지 않은 내용은 추측하지 말고, 알 수 없다고 정직하게 답변해주세요.
+1. 제공된 자료에서 찾은 정보와 일반적으로 알려진 정보를 모두 포함하여 답변해주세요.
+2. 자료에서 찾은 정보는 출처(법령명, 조항 등)를 명확히 인용해주세요.
+3. 자료에 없는 내용이더라도 일반적으로 알려진 사실이나 기술적 정보는 "일반 정보:" 문구와 함께 제공해주세요.
+4. 답변은 다음 순서로 구성해주세요:
+   - 일반적인 설명
+   - 관련 법령 정보 (있는 경우)
+   - 기술적/산업적 정보
+   - 시장/무역 관련 정보
+   - 참고할만한 추가 정보
 """
     model = get_model()
     loop = st.session_state.event_loop
@@ -201,9 +201,9 @@ async def gather_agent_responses(question, history):
 
 # 헤드 에이전트 통합 답변
 def get_head_agent_response(responses, question, history):
-    combined = "\n\n".join([f"=== {n} 전문가 답변 ===\n{r}" for n, r in responses])
+    combined = "\n\n".join([f"=== {n} 관련 정보 ===\n{r}" for n, r in responses])
     prompt = f"""
-당신은 관세, 외국환거래, 대외무역법 분야 전문성을 갖춘 법학 교수이자 여러 자료를 통합하여 종합적인 답변을 제공하는 전문가입니다.
+당신은 덤핑 및 무역 분야의 전문가이자 기술 전문가입니다. 여러 자료의 정보를 통합하여 포괄적인 답변을 제공합니다.
 
 {combined}
 
@@ -213,48 +213,18 @@ def get_head_agent_response(responses, question, history):
 질문: {question}
 
 # 응답 지침
-1 여러 에이전트로부터 받은 답변을 분석하고 통합하여 사용자의 질문에 가장 적합한 최종 답변을 제공합니다.
-2. 제공된 법령 정보에 기반하여 정확하게 답변해주세요.
-3. 답변에 사용한 모든 법령 출처(법령명, 조항)를 명확히 인용해주세요.
-4. 법령에 명시되지 않은 내용은 추측하지 말고, 알 수 없다고 정직하게 답변해주세요.
-5. 모든 답변은 두괄식으로 작성합니다.
+1. 여러 자료의 정보를 통합하여 다음 구조로 답변을 작성하세요:
+   a) 일반적인 설명 (제품/기술/개념에 대한 기본 설명)
+   b) 법령/규정 관련 정보 (있는 경우)
+   c) 기술적/산업적 특징
+   d) 시장/무역 관련 정보
+   e) 참고할만한 추가 정보
+
+2. 자료에서 찾은 정보는 출처를 명시하고, 일반적인 정보는 "일반 정보:" 문구와 함께 제공하세요.
+3. 답변은 이해하기 쉽게 두괄식으로 작성하고, 필요한 경우 항목별로 구분하세요.
+4. 자료에 없는 내용이더라도 일반적으로 알려진 정보는 포함하여 더 유용한 답변이 되도록 하세요.
 """
     return get_model().generate_content(prompt).text
-
-# --- UI: 카테고리 선택 ---
-with st.expander("카테고리 선택 (선택사항)", expanded=True):
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        if st.button("덤핑방지관세", use_container_width=True):
-            st.session_state.selected_category = "덤핑방지관세"
-            st.session_state.law_data = load_law_data("덤핑방지관세")
-            st.session_state.last_used_category = "덤핑방지관세"
-            st.rerun()
-    with c2:
-        if st.button("덤핑판정", use_container_width=True):
-            st.session_state.selected_category = "덤핑판정"
-            st.session_state.law_data = load_law_data("덤핑판정")
-            st.session_state.last_used_category = "덤핑판정"
-            st.rerun()
-    with c3:
-        if st.button("관련법령", use_container_width=True):
-            st.session_state.selected_category = "관련법령"
-            st.session_state.law_data = load_law_data("관련법령")
-            st.session_state.last_used_category = "관련법령"
-            st.rerun()
-    with c4:
-        if st.button("AI 자동 분류", use_container_width=True):
-            st.session_state.selected_category = "auto_classify"
-            st.session_state.last_used_category = "auto_classify"
-            st.rerun()
-
-if st.session_state.selected_category:
-    if st.session_state.selected_category == "auto_classify":
-        st.info("AI가 질문을 분석하여 자동으로 관련 카테고리를 선택합니다.")
-    else:
-        st.info(f"선택된 카테고리: {st.session_state.selected_category}")
-else:
-    st.info("카테고리를 선택하거나 AI 자동 분류를 이용해주세요.")
 
 # 대화 기록 렌더링
 for msg in st.session_state.chat_history:
@@ -263,16 +233,21 @@ for msg in st.session_state.chat_history:
 
 # 사용자 입력 및 응답
 if user_input := st.chat_input("질문을 입력하세요"):
+    # 이전 대화 내용 표시
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+    
+    # 새로운 질문 추가
     st.session_state.chat_history.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
     
     with st.chat_message("assistant"):
         with st.spinner("답변 생성 중..."):
-            # 자동 분류 모드인 경우 또는 선택된 카테고리가 없는 경우
-            if st.session_state.selected_category == "auto_classify" or not st.session_state.selected_category:
-                # AI로 카테고리 분류
-                category = classify_question_category(user_input)
-                st.session_state.law_data = load_law_data(category)
-                st.write(f"🔍 AI 분석 결과: '{category}' 카테고리와 관련된 질문으로 판단되어 해당 법령을 참조합니다.")
+            # 모든 문서를 한번에 로드
+            if not st.session_state.law_data:
+                st.session_state.law_data = load_law_data()
             
             history = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
             responses = st.session_state.event_loop.run_until_complete(
