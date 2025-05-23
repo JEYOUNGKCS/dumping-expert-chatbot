@@ -1,8 +1,11 @@
 python-dotenv
-streamlit
-google-generativeai
-PyPDF2
-asyncio
-numpy
-scikit-learn    # TF-IDF 및 코사인 유사도 계산
-pandas          # 데이터 처리 및 관리
+streamlit>=1.28.0
+google-generativeai>=0.3.0
+PyPDF2>=3.0.0
+asyncio>=3.4.3
+numpy>=1.24.0
+scikit-learn>=1.3.0    # TF-IDF 및 코사인 유사도 계산
+pandas>=2.1.0          # 데이터 처리 및 관리
+requests==2.31.0       # 웹 요청 처리
+beautifulsoup4>=4.12.0 # HTML 파싱
+lxml>=4.9.0           # XML/HTML 파서
