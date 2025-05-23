@@ -16,8 +16,8 @@ import aiohttp                             # 비동기 HTTP 요청을 위한 aio
 
 # --- Streamlit 페이지 설정 ---
 st.set_page_config(
-    page_title="중국산 인쇄제판용 평면모양 사진플레이트 덤핑 전문가 챗봇",
-    page_icon="📚",
+    page_title="중국산 더블레이어 사진플레이트 덤핑 전문가 챗봇",
+    page_icon="📑",
     layout="wide"
 )
 
@@ -80,10 +80,10 @@ FOLLOWUP_RESPONSE_TIMEOUT = 60  # 후속 답변 제한 시간 (초)
 # --- 카테고리 정의 ---
 LAW_CATEGORIES = {
     "덤핑방지관세": {
-        "중국산 인쇄제판용 평면 모양 사진플레이트에 대한 덤핑방지관세 부과에 관한 규칙": "docs/중국산 인쇄제판용 평면 모양 사진플레이트에 대한 덤핑방지관세 부과에 관한 규칙(기획재정부령)(제00882호)(20220101) (1).pdf",
+        "중국산 더블레이어 인쇄제판용 평면 모양 사진플레이트에 대한 덤핑방지관세 부과에 관한 규칙": "docs/중국산 더블레이어 인쇄제판용 평면 모양 사진플레이트에 대한 덤핑방지관세 부과에 관한 규칙(기획재정부령)(제00940호)(20221025).pdf",
     },
     "덤핑판정": {
-        "중국산 인쇄제판용 평면모양 사진플레이트 최종판정": "docs/중국산 인쇄제판용 평면모양 사진플레이트_최종판정의결서.pdf",
+        "중국산 더블레이어 인쇄제판용 평면모양 사진플레이트 최종판정": "docs/중국산 더블레이어 인쇄제판용 평면모양 사진플레이트_최종판정의결서.pdf",
     },
     "관련법령": {
         "관세법": "docs/관세법(법률)(제20608호)(20250401).pdf",
@@ -95,8 +95,8 @@ LAW_CATEGORIES = {
 
 # 카테고리별 키워드 정보
 CATEGORY_KEYWORDS = {
-    "덤핑방지관세": ["인쇄제판용", "평면모양", "사진플레이트", "덤핑방지관세", "덤핑마진", "정상가격", "수출가격", "덤핑률"],
-    "덤핑판정": ["최종판정", "예비판정", "산업피해", "실질적 피해", "인과관계", "국내산업", "조사대상물품", "덤핑수입"],
+    "덤핑방지관세": ["더블레이어", "인쇄제판용", "평면모양", "사진플레이트", "덤핑방지관세", "덤핑마진", "정상가격", "수출가격", "덤핑률"],
+    "덤핑판정": ["더블레이어", "최종판정", "예비판정", "산업피해", "실질적 피해", "인과관계", "국내산업", "조사대상물품", "덤핑수입"],
     "관련법령": ["관세법", "시행령", "시행규칙", "불공정무역", "산업피해구제", "무역위원회", "조사절차", "덤핑규정"]
 }
 
@@ -110,33 +110,42 @@ CATEGORY_PRIORITY = {
 # 공급자별 덤핑방지관세율 정보
 SUPPLIERS_INFO = {
     "MAJOR_SUPPLIERS": {
-        "코닥그래픽": {
-            "name_kr": "코닥그래픽",
-            "name_en": "Kodak (China) Graphic Communications Co., Ltd.",
-            "rate": 10.32
+        "러차이": {
+            "name_kr": "러차이",
+            "name_en": "Jiangsu Lecai Printing Material Co., Ltd.",
+            "rate": 4.10,
+            "description": "러차이 및 그 기업의 제품을 수출하는 자"
         },
-        "보시카": {
-            "name_kr": "보시카",
-            "name_en": "Shanghai Bocica Printing Equipment Co., Ltd.",
-            "rate": 10.32
+        "코닥": {
+            "name_kr": "코닥",
+            "name_en": "Kodak (China) Graphic Communications Company Limited",
+            "rate": 3.60,
+            "description": "코닥과 그 관계사",
+            "related_companies": [
+                "코닥 인베스트먼트[Kodak (China) Investment Co., Ltd.]",
+                "코닥 코리아(Kodak Korea Ltd.)",
+                "이스트만 코닥(Eastman Kodak Company)",
+                "화광(Lucky Huaguang Graphics Co., Ltd.)",
+                "화광 난양(Lucky Huaguang Nanyang Trading Co., Ltd.)",
+                "화광 바오리(Suzhou Huaguang Baoli Printing Plate Material Co., Ltd.)",
+                "종인(Zhongyin Printing Equipment Co., Ltd.)",
+                "아그파 화광[Agfa Huaguang (Shanghai) Printing Equipment Co., Ltd.]",
+                "화푸(Henan Huafu Packaging Technology Co., Ltd.)",
+                "코닥 일렉트로닉[Kodak Electronic Products (Shanghai) Company Limited]"
+            ]
         },
-        "화광그래픽": {
-            "name_kr": "화광그래픽",
-            "name_en": "Lucky Huaguang Graphics Co., Ltd.",
-            "rate": 10.32
-        },
-        "화광바오리": {
-            "name_kr": "화광바오리",
-            "name_en": "Suzhou Huaguang Baoli Printing Plate Material Co., Ltd.",
-            "rate": 10.32
-        },
-        "종인": {
-            "name_kr": "종인",
-            "name_en": "Zhongyin Printing Equipment Co., Ltd.",
-            "rate": 10.32
+        "화펑": {
+            "name_kr": "화펑",
+            "name_en": "Chongqing Huafeng Dijet Printing Material Co., Ltd.",
+            "rate": 7.61,
+            "description": "화펑과 그 관계사",
+            "related_companies": [
+                "화펑PM(Chongqing Huafeng Printing Material Co., Ltd.)"
+            ]
         }
     },
-    "OTHER_SUPPLIERS_RATE": 8.78
+    "OTHER_SUPPLIERS_RATE": 4.87,
+    "OTHER_SUPPLIERS_DESCRIPTION": "그 밖의 공급자"
 }
 
 # API 호출 제한을 위한 설정
