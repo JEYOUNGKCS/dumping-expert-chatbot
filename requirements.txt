@@ -9,3 +9,5 @@ pandas>=2.1.0          # 데이터 처리 및 관리
 requests==2.31.0       # 웹 요청 처리
 beautifulsoup4>=4.12.0 # HTML 파싱
 lxml>=4.9.0           # XML/HTML 파서
+aiohttp==3.9.1        # 비동기 HTTP 클라이언트/서버
+charset-normalizer>=3.0.0  # aiohttp 의존성
