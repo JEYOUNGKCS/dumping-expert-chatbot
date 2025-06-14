@@ -31,23 +31,49 @@ if 'gemini_api_key' not in st.session_state:
 if 'serper_api_key' not in st.session_state:
     st.session_state.serper_api_key = ""
 
-with st.sidebar.expander("🔑 API Key 설정", expanded=True):
-    key_input = st.text_input(
-        label="Google Gemini API Key 입력",
-        type="password",
-        placeholder="여기에 API Key를 입력하세요",
-        value=st.session_state.gemini_api_key,
-    )
-    serper_key_input = st.text_input(
-        label="Serper API Key 입력",
-        type="password",
-        placeholder="여기에 Serper API Key를 입력하세요",
-        value=st.session_state.serper_api_key,
-    )
-    if key_input:
-        st.session_state.gemini_api_key = key_input
-    if serper_key_input:
-        st.session_state.serper_api_key = serper_key_input
+with st.sidebar:
+    # API 키 입력 부분을 먼저 배치
+    with st.expander("🔑 API Key 설정", expanded=True):
+        key_input = st.text_input(
+            label="Google Gemini API Key 입력",
+            type="password",
+            placeholder="여기에 API Key를 입력하세요",
+            value=st.session_state.gemini_api_key,
+        )
+        serper_key_input = st.text_input(
+            label="Serper API Key 입력",
+            type="password",
+            placeholder="여기에 Serper API Key를 입력하세요",
+            value=st.session_state.serper_api_key,
+        )
+        if key_input:
+            st.session_state.gemini_api_key = key_input
+        if serper_key_input:
+            st.session_state.serper_api_key = serper_key_input
+
+    st.divider()  # 구분선 추가
+
+    # 사용 안내 부분
+    st.title("📚 사용 안내")
+    st.markdown("""
+    ### 중국산 더블레이어 사진플레이트 전문가 챗봇
+    
+    이 챗봇은 중국산 더블레이어 인쇄제판용 평면 모양 사진플레이트에 대한 
+    덤핑방지관세 부과 규칙과 관련 법령을 기반으로 만들어진 전문가 챗봇입니다.
+    
+    ### 주요 법령 근거
+    - 중국산 더블레이어 인쇄제판용 평면 모양 사진플레이트에 대한 덤핑방지관세 부과 규칙
+    - 중국산 더블레이어 인쇄제판용 평면모양 사진플레이트 최종판정
+    - 관세법 및 시행령
+    - 불공정무역행위 조사 및 산업피해구제에 관한 법률
+    
+    ### 문의 가능한 주제
+    - 덤핑방지관세율 확인
+    - 공급자별 세율 정보
+    - 덤핑 판정 내용
+    - 관련 법령 해석
+    - 특수관계 공급자 확인
+    """)
 
 if not st.session_state.gemini_api_key:
     st.sidebar.warning("챗봇을 이용하려면 API Key를 입력해주세요.")
@@ -1202,18 +1228,24 @@ async def process_user_input(user_input, history):
             time_diff = current_time - st.session_state.last_question_time
             st.session_state.is_followup_question = time_diff < 30
         
-        # 질문 분석을 통한 카테고리 우선순위 결정
+        # 1차 질문인 경우 빠른 응답 생성
+        if not st.session_state.is_followup_question:
+            try:
+                async with asyncio.timeout(INITIAL_RESPONSE_TIMEOUT):
+                    # 빠른 초기 응답 생성
+                    answer = get_quick_response(user_input)
+                    st.session_state.last_question_time = current_time
+                    return answer
+            except asyncio.TimeoutError:
+                return "죄송합니다. 응답 시간이 초과되었습니다. 다시 질문해주세요."
+        
+        # 후속 질문인 경우 기존 로직 사용
         relevant_categories = analyze_question_categories(user_input)
-        
-        # 타임아웃 설정
-        timeout = FOLLOWUP_RESPONSE_TIMEOUT if st.session_state.is_followup_question else INITIAL_RESPONSE_TIMEOUT
-        
-        # 부분 응답을 저장할 변수
         partial_responses = []
         found_relevant_answer = False
         
         try:
-            async with asyncio.timeout(timeout):
+            async with asyncio.timeout(FOLLOWUP_RESPONSE_TIMEOUT):
                 # 우선순위가 높은 카테고리부터 처리
                 for category in sorted(relevant_categories, key=lambda x: CATEGORY_PRIORITY[x]):
                     if found_relevant_answer:
@@ -1221,12 +1253,10 @@ async def process_user_input(user_input, history):
                         
                     async for response in stream_agent_responses(user_input, history, category):
                         partial_responses.append(response)
-                        # 응답의 관련성 검사
                         if is_response_relevant(response[1], user_input):
                             found_relevant_answer = True
                             break
                 
-                # 관련 응답을 찾지 못한 경우 나머지 카테고리 검색
                 if not found_relevant_answer:
                     remaining_categories = set(LAW_CATEGORIES.keys()) - set(relevant_categories)
                     for category in sorted(remaining_categories, key=lambda x: CATEGORY_PRIORITY[x]):
@@ -1462,23 +1492,17 @@ async def gather_agent_responses(question, history):
     return await asyncio.gather(*tasks)
 
 # 사용자 입력 및 응답 부분 수정
-if user_input := st.chat_input("질문을 입력하세요"):
+if user_input := st.chat_input("질문을 입력하세요", key="main_chat_input"):
     # 새로운 질문 추가
     st.session_state.chat_history.append({"role": "user", "content": user_input})
     
-    # 대화 기록 한 번만 표시
-    messages_container = st.container()
-    with messages_container:
-        for msg in st.session_state.chat_history[:-1]:  # 새 질문 제외하고 표시
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-    
-    # 새 질문과 답변 표시
+    # 사용자 질문 표시
     with st.chat_message("user"):
         st.markdown(user_input)
     
-    with st.chat_message("assistant"):
-        with st.spinner("답변 생성 중..."):
+    # 답변 생성
+    with st.spinner("답변 생성 중..."):
+        try:
             # 모든 문서를 한번에 로드
             if not st.session_state.law_data:
                 st.session_state.law_data = load_law_data()
@@ -1488,41 +1512,16 @@ if user_input := st.chat_input("질문을 입력하세요"):
             # 비동기 처리
             answer = asyncio.run(process_user_input(user_input, history))
             
-            st.markdown(answer)
-            st.session_state.chat_history.append({"role": "assistant", "content": answer})
-
-# 이전 대화 기록 렌더링 부분 제거 (중복 방지)
-# for msg in st.session_state.chat_history:
-#     with st.chat_message(msg['role']):
-#         st.markdown(msg['content'])
-
-# 사이드바 안내
-with st.sidebar:
-    st.markdown("""
-### ℹ️ 사용 안내
-
-이 챗봇은 중국산 인쇄제판용 평면모양 사진플레이트에 대한 덤핑 조사 및 관련 법령에 대해 전문적인 답변을 제공합니다.
-
-다음 자료들을 기반으로 답변을 제공합니다:
-
-**덤핑방지관세 관련:**
-- 중국산 인쇄제판용 평면 모양 사진플레이트에 대한 덤핑방지관세 부과에 관한 규칙
-
-**덤핑판정 관련:**
-- 중국산 인쇄제판용 평면모양 사진플레이트 최종판정의결서
-
-**관련법령:**
-- 관세법
-- 관세법 시행령
-- 관세법 시행규칙
-- 불공정무역행위 조사 및 산업피해구제에 관한 법률
-
-### 💡 질문 예시
-- 중국산 인쇄제판용 평면모양 사진플레이트의 덤핑마진율은 얼마인가요?
-- 이 제품의 산업피해 판정 결과는 어떠했나요?
-- 덤핑방지관세 부과기간은 얼마인가요?
-- 조사대상물품의 정확한 범위는 무엇인가요?
-""")
-    if st.button("새 채팅 시작", type="primary"):
-        st.session_state.chat_history = []
-        st.rerun()
+            if answer:
+                # 답변을 채팅 기록에 추가
+                st.session_state.chat_history.append({"role": "assistant", "content": answer})
+                
+                # 채팅 기록 업데이트
+                with st.chat_message("assistant"):
+                    st.markdown(answer)
+            else:
+                st.error("답변을 생성하는데 실패했습니다. 다시 시도해주세요.")
+            
+        except Exception as e:
+            st.error(f"오류가 발생했습니다: {str(e)}")
+            st.session_state.chat_history.pop()  # 실패한 질문 제거
